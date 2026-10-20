@@ -1,0 +1,38 @@
+# Configuracion local y credenciales
+.env
+.env.*
+!.env.example
+
+# Artefactos de Go
+bin/
+dist/
+tmp/
+*.test
+coverage.out
+*.log
+
+# Configuracion local de herramientas
+.serena/
+
+# Archivos generados por el sistema operativo y el editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
