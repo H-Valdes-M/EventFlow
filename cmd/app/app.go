@@ -72,7 +72,8 @@ func (a *App) Init() error {
 	if cfg.AppEnv != "prod" {
 		router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
-	routes.ConfigureModule(router, c)
+	apiRouter := routes.NewAPIRouter(c)
+	apiRouter.RegisterRoutes(router)
 
 	a.config, a.log, a.db = cfg, log, db
 	a.container, a.router = c, router
