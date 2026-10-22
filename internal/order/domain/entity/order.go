@@ -8,9 +8,11 @@ import (
 	"unicode/utf8"
 )
 
-const maxOrderItems = 100                    //maximo de items que puede tener un pedido
-type OrderStatus string                      //representa los estados de negocio que puede tener un pedido.
-const OrderPending OrderStatus = "pendiente" //pendiente de pago
+const maxOrderItems = 100 // máximo de items que puede tener un pedido.
+
+type OrderStatus string // representa los estados de negocio de un pedido.
+
+const OrderPending OrderStatus = "pending"
 
 type Order struct {
 	ID         string
@@ -31,7 +33,7 @@ func NewOrder(id, customerID string, items []OrderItem, now time.Time) (Order, e
 		return Order{}, orderValidationError("items", "El pedido debe tener entre 1 y 100 items")
 	}
 
-	normalizedItems := make([]OrderItem, len(items))
+	normalizedItems := make([]OrderItem, 0, len(items))
 	productIDs := make(map[string]struct{})
 	for _, item := range items {
 		validatedItem, err := ValidateItem(item)

@@ -23,7 +23,7 @@ func ValidateItem(item OrderItem) (OrderItem, error) {
 	if lenght := utf8.RuneCountInString(item.ProductID); lenght == 0 || lenght > maxIdentifier {
 		return OrderItem{}, validationError("product_id", "El identificador del producto debe tener entre 1 y 100 caracteres")
 	}
-	if item.Quantity <= 1 || item.Quantity > maxItemQuantity {
+	if item.Quantity < 1 || item.Quantity > maxItemQuantity {
 		return OrderItem{}, validationError("quantity", "La cantidad debe estar entre 1 y 1,000,000")
 	}
 	if item.UnitPriceMinor <= 0 {

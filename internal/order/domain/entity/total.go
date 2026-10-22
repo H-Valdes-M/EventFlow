@@ -8,6 +8,9 @@ import (
 func CalculateTotal(items []OrderItem) (int64, error) {
 	var total int64
 	for _, item := range items {
+		if item.Quantity < 1 || item.UnitPriceMinor <= 0 {
+			return 0, totalError()
+		}
 		if item.Quantity > math.MaxInt64/item.UnitPriceMinor {
 			return 0, totalError()
 		}

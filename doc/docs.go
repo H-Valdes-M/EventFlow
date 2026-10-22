@@ -40,9 +40,95 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/orders": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orders"
+                ],
+                "summary": "Crear pedido",
+                "parameters": [
+                    {
+                        "description": "Pedido",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.createOrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/handler.createOrderResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponse"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponse"
+                        }
+                    },
+                    "415": {
+                        "description": "Unsupported Media Type",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "apperrors.Type": {
+            "type": "string",
+            "enum": [
+                "BAD_REQUEST",
+                "VALIDATION_ERROR",
+                "NOT_FOUND",
+                "CONFLICT",
+                "PAYLOAD_TOO_LARGE",
+                "UNSUPPORTED_MEDIA_TYPE",
+                "SERVICE_UNAVAILABLE",
+                "INTERNAL_ERROR"
+            ],
+            "x-enum-varnames": [
+                "BadRequest",
+                "ValidationError",
+                "NotFound",
+                "Conflict",
+                "PayloadTooLarge",
+                "UnsupportedMediaType",
+                "ServiceUnavailable",
+                "InternalError"
+            ]
+        },
         "dto.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -69,6 +155,80 @@ const docTemplate = `{
                 "timestamp": {
                     "type": "string",
                     "example": "2024-01-15T10.30:00Z"
+                }
+            }
+        },
+        "handler.createOrderRequest": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handler.orderItemRequest"
+                    }
+                }
+            }
+        },
+        "handler.createOrderResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "total_minor": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handler.orderItemRequest": {
+            "type": "object",
+            "properties": {
+                "product_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer"
+                },
+                "unit_price_minor": {
+                    "type": "integer"
+                }
+            }
+        },
+        "httputil.ErrorBody": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "message": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/apperrors.Type"
+                }
+            }
+        },
+        "httputil.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/httputil.ErrorBody"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
                 }
             }
         }
