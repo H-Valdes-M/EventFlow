@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"regexp"
 	"time"
 
 	"eventflow/internal/order/application/dto"
@@ -18,19 +19,27 @@ import (
 
 const maxRequestBodyBytes = 1 << 20
 
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+
 // CreateOrderExecutor es el contrato que necesita el handler para crear un
 // pedido. Mantenerlo como interfaz facilita probar HTTP sin PostgreSQL.
 type CreateOrderExecutor interface {
 	Execute(context.Context, dto.CreateOrderInput) (dto.CreateOrderOutput, error)
 }
 
+// GetOrderExecutor es el contrato que necesita el handler para consultar un pedido.
+type GetOrderExecutor interface {
+	Execute(context.Context, string) (dto.GetOrderOutput, error)
+}
+
 // OrderHandler adapta las peticiones HTTP del módulo de pedidos.
 type OrderHandler struct {
 	create CreateOrderExecutor
+	get    GetOrderExecutor
 }
 
-func NewOrderHandler(create CreateOrderExecutor) *OrderHandler {
-	return &OrderHandler{create: create}
+func NewOrderHandler(create CreateOrderExecutor, get GetOrderExecutor) *OrderHandler {
+	return &OrderHandler{create: create, get: get}
 }
 
 // Create crea un pedido validado por el caso de uso.
@@ -65,6 +74,48 @@ func (h *OrderHandler) Create(c *gin.Context) {
 	})
 }
 
+// GetByID consulta un pedido y sus artículos.
+//
+// @Summary Consultar pedido
+// @Tags orders
+// @Produce json
+// @Param id path string true "UUID del pedido"
+// @Success 200 {object} getOrderResponse
+// @Failure 400,404,500 {object} httputil.ErrorResponse
+// @Router /orders/{id} [get]
+func (h *OrderHandler) GetByID(c *gin.Context) {
+	id := c.Param("id")
+	if !uuidPattern.MatchString(id) {
+		writeError(c, apperrors.New(apperrors.BadRequest, "INVALID_ORDER_ID", "El identificador del pedido no es valido"))
+		return
+	}
+
+	output, err := h.get.Execute(c.Request.Context(), id)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	c.Set("order_id", output.ID)
+	items := make([]orderItemResponse, len(output.Items))
+	for index, item := range output.Items {
+		items[index] = orderItemResponse{
+			ProductID:      item.ProductID,
+			Quantity:       item.Quantity,
+			UnitPriceMinor: item.UnitPriceMinor,
+		}
+	}
+	c.JSON(http.StatusOK, getOrderResponse{
+		ID:         output.ID,
+		CustomerID: output.CustomerID,
+		Items:      items,
+		TotalMinor: output.TotalMinor,
+		Status:     output.Status,
+		CreatedAt:  output.CreatedAt,
+		UpdatedAt:  output.UpdatedAt,
+	})
+}
+
 type createOrderRequest struct {
 	CustomerID string             `json:"customer_id"`
 	Items      []orderItemRequest `json:"items"`
@@ -80,6 +131,22 @@ type createOrderResponse struct {
 	ID         string `json:"id"`
 	Status     string `json:"status"`
 	TotalMinor int64  `json:"total_minor"`
+}
+
+type getOrderResponse struct {
+	ID         string              `json:"id"`
+	CustomerID string              `json:"customer_id"`
+	Items      []orderItemResponse `json:"items"`
+	TotalMinor int64               `json:"total_minor"`
+	Status     string              `json:"status"`
+	CreatedAt  time.Time           `json:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at"`
+}
+
+type orderItemResponse struct {
+	ProductID      string `json:"product_id"`
+	Quantity       int64  `json:"quantity"`
+	UnitPriceMinor int64  `json:"unit_price_minor"`
 }
 
 func decodeCreateRequest(c *gin.Context) (dto.CreateOrderInput, error) {

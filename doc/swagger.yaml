@@ -58,7 +58,35 @@ definitions:
       total_minor:
         type: integer
     type: object
+  handler.getOrderResponse:
+    properties:
+      created_at:
+        type: string
+      customer_id:
+        type: string
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/handler.orderItemResponse'
+        type: array
+      status:
+        type: string
+      total_minor:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   handler.orderItemRequest:
+    properties:
+      product_id:
+        type: string
+      quantity:
+        type: integer
+      unit_price_minor:
+        type: integer
+    type: object
+  handler.orderItemResponse:
     properties:
       product_id:
         type: string
@@ -151,6 +179,36 @@ paths:
           schema:
             $ref: '#/definitions/httputil.ErrorResponse'
       summary: Crear pedido
+      tags:
+      - orders
+  /orders/{id}:
+    get:
+      parameters:
+      - description: UUID del pedido
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.getOrderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+      summary: Consultar pedido
       tags:
       - orders
 swagger: "2.0"

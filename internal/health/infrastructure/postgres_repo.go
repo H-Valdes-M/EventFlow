@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"eventflow/pkg/database"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresHealthRepository struct {
@@ -18,6 +16,5 @@ func NewPostgresHealthRepository(db database.Database) *PostgresHealthRepository
 
 // Implementamos la interfaz del repository
 func (r *PostgresHealthRepository) Ping(ctx context.Context) error {
-	pool := r.db.Native().(*pgxpool.Pool)
-	return pool.Ping(ctx)
+	return r.db.Ping(ctx)
 }

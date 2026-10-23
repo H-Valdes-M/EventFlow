@@ -9,4 +9,5 @@ import (
 // Register publica las rutas disponibles del módulo de pedidos.
 func Register(routes gin.IRoutes, orderHandler *handler.OrderHandler) {
 	routes.POST("/orders", orderHandler.Create)
+	routes.GET("/orders/:id", orderHandler.GetByID)
 }

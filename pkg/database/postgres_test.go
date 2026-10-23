@@ -2,28 +2,12 @@ package database
 
 import (
 	"context"
-	"errors"
 	"net/url"
 	"os"
 	"strconv"
 	"testing"
 	"time"
 )
-
-func TestPostgresDatabasePingDelegaElContexto(t *testing.T) {
-	want := errors.New("base no disponible")
-	pool := &fakePostgresPool{pingErr: want}
-	database := &PostgresDatabase{pool: pool}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	if err := database.Ping(ctx); !errors.Is(err, want) {
-		t.Fatalf("ping = %v, se esperaba %v", err, want)
-	}
-	if pool.context != ctx {
-		t.Fatal("Ping debe propagar el contexto recibido")
-	}
-}
 
 func TestPostgresDatabasePingSinProviderFallaControladamente(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -34,18 +18,14 @@ func TestPostgresDatabasePingSinProviderFallaControladamente(t *testing.T) {
 }
 
 func TestPostgresDatabaseCloseEsSeguro(t *testing.T) {
-	pool := &fakePostgresPool{}
-	database := &PostgresDatabase{pool: pool}
+	database := &PostgresDatabase{}
 	database.Close()
 	database.Close()
-	if pool.closes != 2 {
-		t.Fatalf("Close debe delegar para cada llamada, llego %d", pool.closes)
-	}
 	(*PostgresDatabase)(nil).Close()
 }
 
-func TestAsPostgresPoolRechazaProviderIncompatible(t *testing.T) {
-	if _, err := AsPostgresPool(fakeDatabase{}); err == nil {
+func TestAsGORMRechazaProviderIncompatible(t *testing.T) {
+	if _, err := AsGORM(fakeDatabase{}); err == nil {
 		t.Fatal("un provider incompatible debe devolver error")
 	}
 }
@@ -92,21 +72,6 @@ func TestPostgresPingIntegracion(t *testing.T) {
 	if err := database.Ping(ctx); err != nil {
 		t.Fatal("Ping real contra PostgreSQL falló dentro del timeout")
 	}
-}
-
-type fakePostgresPool struct {
-	context context.Context
-	pingErr error
-	closes  int
-}
-
-func (p *fakePostgresPool) Ping(ctx context.Context) error {
-	p.context = ctx
-	return p.pingErr
-}
-
-func (p *fakePostgresPool) Close() {
-	p.closes++
 }
 
 type fakeDatabase struct{}

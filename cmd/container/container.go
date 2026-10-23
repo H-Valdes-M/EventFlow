@@ -13,8 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Container centraliza las dependencias de los módulos actualmente disponibles.
-// Orders se incorporará aquí cuando se implemente ese módulo.
+// Container centraliza las dependencias de los módulos disponibles.
 type Container struct {
 	DB            database.Database
 	HealthHandler *handler.HealthHandler
@@ -30,6 +29,7 @@ func NewContainer(db database.Database, log *zap.Logger) (*Container, error) {
 		return nil, err
 	}
 	orderUseCase := orderusecase.NewCreateOrderUseCase(orderRepo)
+	getOrderUseCase := orderusecase.NewGetOrderUseCase(orderRepo)
 
 	if log == nil {
 		log = logger.NewNop()
@@ -37,7 +37,7 @@ func NewContainer(db database.Database, log *zap.Logger) (*Container, error) {
 	return &Container{
 		DB:            db,
 		HealthHandler: handler.NewHealthHandler(healthUseCase),
-		OrderHandler:  orderhandler.NewOrderHandler(orderUseCase),
+		OrderHandler:  orderhandler.NewOrderHandler(orderUseCase, getOrderUseCase),
 		Log:           log,
 	}, nil
 }

@@ -7,7 +7,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 // PostgresConfig contiene solo los datos necesarios para crear el pool. No se
@@ -21,42 +22,43 @@ type PostgresConfig struct {
 	SSLMode  string
 }
 
-type postgresPool interface {
-	Ping(context.Context) error
-	Close()
-}
-
-// PostgresDatabase implementa Database sobre un pool de pgx.
+// PostgresDatabase implementa Database sobre GORM con el driver PostgreSQL.
 type PostgresDatabase struct {
-	pool   postgresPool
-	native *pgxpool.Pool
+	db *gorm.DB
 }
 
-// NewPostgresDatabase crea un pool sin afirmar conectividad. La disponibilidad
+// NewPostgresDatabase crea el cliente GORM sin afirmar conectividad. La disponibilidad
 // se comprueba más tarde mediante Ping con el contexto y plazo del llamador.
 func NewPostgresDatabase(ctx context.Context, config PostgresConfig) (*PostgresDatabase, error) {
-	pool, err := pgxpool.New(ctx, postgresDSN(config))
+	db, err := gorm.Open(postgres.Open(postgresDSN(config)), &gorm.Config{})
 	if err != nil {
 		return nil, errors.New("configuracion de PostgreSQL invalida")
 	}
-	return &PostgresDatabase{pool: pool, native: pool}, nil
+	return &PostgresDatabase{db: db.WithContext(ctx)}, nil
 }
 
 // Ping comprueba conectividad sin ocultar el contexto de cancelación del
 // llamador.
 func (d *PostgresDatabase) Ping(ctx context.Context) error {
-	if d == nil || d.pool == nil {
+	if d == nil || d.db == nil {
 		return errors.New("provider PostgreSQL no inicializado")
 	}
-	return d.pool.Ping(ctx)
+	sqlDB, err := d.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
 }
 
 // Close libera el pool. Es seguro para instancias no inicializadas.
 func (d *PostgresDatabase) Close() {
-	if d == nil || d.pool == nil {
+	if d == nil || d.db == nil {
 		return
 	}
-	d.pool.Close()
+	sqlDB, err := d.db.DB()
+	if err == nil {
+		_ = sqlDB.Close()
+	}
 }
 
 // Native expone el pool real solo para adaptadores de infraestructura.
@@ -64,20 +66,20 @@ func (d *PostgresDatabase) Native() any {
 	if d == nil {
 		return nil
 	}
-	return d.native
+	return d.db
 }
 
-// AsPostgresPool obtiene el pool concreto o devuelve un error controlado para
-// impedir assertions que puedan causar panic en infraestructura.
-func AsPostgresPool(database Database) (*pgxpool.Pool, error) {
+// AsGORM obtiene el cliente GORM o devuelve un error controlado para impedir
+// assertions que puedan causar panic en infraestructura.
+func AsGORM(database Database) (*gorm.DB, error) {
 	if database == nil {
 		return nil, errors.New("provider de base de datos no configurado")
 	}
-	pool, ok := database.Native().(*pgxpool.Pool)
-	if !ok || pool == nil {
+	db, ok := database.Native().(*gorm.DB)
+	if !ok || db == nil {
 		return nil, errors.New("provider de base de datos incompatible con PostgreSQL")
 	}
-	return pool, nil
+	return db, nil
 }
 
 func postgresDSN(config PostgresConfig) string {
