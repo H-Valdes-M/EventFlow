@@ -32,14 +32,20 @@ type GetOrderExecutor interface {
 	Execute(context.Context, string) (dto.GetOrderOutput, error)
 }
 
+// GetAllOrdersExecutor es el contrato que necesita el handler para listar pedidos.
+type GetAllOrdersExecutor interface {
+	Execute(context.Context) ([]dto.GetOrderOutput, error)
+}
+
 // OrderHandler adapta las peticiones HTTP del módulo de pedidos.
 type OrderHandler struct {
 	create CreateOrderExecutor
 	get    GetOrderExecutor
+	getAll GetAllOrdersExecutor
 }
 
-func NewOrderHandler(create CreateOrderExecutor, get GetOrderExecutor) *OrderHandler {
-	return &OrderHandler{create: create, get: get}
+func NewOrderHandler(create CreateOrderExecutor, get GetOrderExecutor, getAll GetAllOrdersExecutor) *OrderHandler {
+	return &OrderHandler{create: create, get: get, getAll: getAll}
 }
 
 // Create crea un pedido validado por el caso de uso.
@@ -97,23 +103,29 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 	}
 
 	c.Set("order_id", output.ID)
-	items := make([]orderItemResponse, len(output.Items))
-	for index, item := range output.Items {
-		items[index] = orderItemResponse{
-			ProductID:      item.ProductID,
-			Quantity:       item.Quantity,
-			UnitPriceMinor: item.UnitPriceMinor,
-		}
+	c.JSON(http.StatusOK, orderResponse(output))
+}
+
+// GetAll consulta todos los pedidos almacenados.
+//
+// @Summary Listar pedidos
+// @Tags orders
+// @Produce json
+// @Success 200 {array} getOrderResponse
+// @Failure 500 {object} httputil.ErrorResponse
+// @Router /orders [get]
+func (h *OrderHandler) GetAll(c *gin.Context) {
+	outputs, err := h.getAll.Execute(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
 	}
-	c.JSON(http.StatusOK, getOrderResponse{
-		ID:         output.ID,
-		CustomerID: output.CustomerID,
-		Items:      items,
-		TotalMinor: output.TotalMinor,
-		Status:     output.Status,
-		CreatedAt:  output.CreatedAt,
-		UpdatedAt:  output.UpdatedAt,
-	})
+
+	orders := make([]getOrderResponse, len(outputs))
+	for index, output := range outputs {
+		orders[index] = orderResponse(output)
+	}
+	c.JSON(http.StatusOK, orders)
 }
 
 type createOrderRequest struct {
@@ -147,6 +159,26 @@ type orderItemResponse struct {
 	ProductID      string `json:"product_id"`
 	Quantity       int64  `json:"quantity"`
 	UnitPriceMinor int64  `json:"unit_price_minor"`
+}
+
+func orderResponse(output dto.GetOrderOutput) getOrderResponse {
+	items := make([]orderItemResponse, len(output.Items))
+	for index, item := range output.Items {
+		items[index] = orderItemResponse{
+			ProductID:      item.ProductID,
+			Quantity:       item.Quantity,
+			UnitPriceMinor: item.UnitPriceMinor,
+		}
+	}
+	return getOrderResponse{
+		ID:         output.ID,
+		CustomerID: output.CustomerID,
+		Items:      items,
+		TotalMinor: output.TotalMinor,
+		Status:     output.Status,
+		CreatedAt:  output.CreatedAt,
+		UpdatedAt:  output.UpdatedAt,
+	}
 }
 
 func decodeCreateRequest(c *gin.Context) (dto.CreateOrderInput, error) {

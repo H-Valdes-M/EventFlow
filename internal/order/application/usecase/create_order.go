@@ -46,7 +46,7 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, input dto.CreateOrder
 		return dto.CreateOrderOutput{}, err
 	}
 
-	if _, err := uc.repo.Save(ctx, order); err != nil {
+	if err := uc.repo.Save(ctx, order); err != nil {
 		return dto.CreateOrderOutput{}, fmt.Errorf("guardar pedido: %w", err)
 	}
 

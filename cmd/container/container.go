@@ -30,6 +30,7 @@ func NewContainer(db database.Database, log *zap.Logger) (*Container, error) {
 	}
 	orderUseCase := orderusecase.NewCreateOrderUseCase(orderRepo)
 	getOrderUseCase := orderusecase.NewGetOrderUseCase(orderRepo)
+	getAllOrdersUseCase := orderusecase.NewGetAllOrdersUseCase(orderRepo)
 
 	if log == nil {
 		log = logger.NewNop()
@@ -37,7 +38,7 @@ func NewContainer(db database.Database, log *zap.Logger) (*Container, error) {
 	return &Container{
 		DB:            db,
 		HealthHandler: handler.NewHealthHandler(healthUseCase),
-		OrderHandler:  orderhandler.NewOrderHandler(orderUseCase, getOrderUseCase),
+		OrderHandler:  orderhandler.NewOrderHandler(orderUseCase, getOrderUseCase, getAllOrdersUseCase),
 		Log:           log,
 	}, nil
 }

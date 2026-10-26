@@ -27,7 +27,7 @@ func NewOrderRepository(provider database.Database) (*OrderRepository, error) {
 }
 
 // Save guarda el pedido y sus artículos en una misma transacción.
-func (r *OrderRepository) Save(ctx context.Context, order entity.Order) (*entity.Order, error) {
+func (r *OrderRepository) Save(ctx context.Context, order entity.Order) error {
 	model := orderModelFromEntity(order)
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Omit("Items").Create(&model).Error; err != nil {
@@ -38,11 +38,10 @@ func (r *OrderRepository) Save(ctx context.Context, order entity.Order) (*entity
 		}
 		return tx.Create(&model.Items).Error
 	}); err != nil {
-		return nil, persistenceError(err)
+		return persistenceError(err)
 	}
 
-	saved := order
-	return &saved, nil
+	return nil
 }
 
 // FindByID reconstruye un pedido junto con sus artículos sin modificar la
@@ -59,6 +58,27 @@ func (r *OrderRepository) FindByID(ctx context.Context, id string) (*entity.Orde
 		return nil, persistenceError(err)
 	}
 	return model.toEntity(), nil
+}
+
+// FindAll reconstruye todos los pedidos junto con sus artículos, ordenados del
+// más reciente al más antiguo.
+func (r *OrderRepository) FindAll(ctx context.Context) ([]*entity.Order, error) {
+	var models []orderModel
+	err := r.db.WithContext(ctx).
+		Preload("Items", func(db *gorm.DB) *gorm.DB {
+			return db.Order("product_id")
+		}).
+		Order("created_at DESC").
+		Find(&models).Error
+	if err != nil {
+		return nil, persistenceError(err)
+	}
+
+	orders := make([]*entity.Order, len(models))
+	for index, model := range models {
+		orders[index] = model.toEntity()
+	}
+	return orders, nil
 }
 
 type orderModel struct {

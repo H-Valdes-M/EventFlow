@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eventflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-eventflow}
+      POSTGRES_USER: ${DB_USER:-eventflow}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cruzados123}
+    ports:
+      - "5433:5432"
+    volumes:
+      - eventflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventflow -d eventflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: eventflow-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${DB_USER:-eventflow}:${DB_PASSWORD:-cruzados123}@postgres:5432/${DB_NAME:-eventflow}?sslmode=disable
+      - up
+    restart: "no"
+
+volumes:
+  eventflow_postgres_data:
