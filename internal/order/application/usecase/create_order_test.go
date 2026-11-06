@@ -12,11 +12,18 @@ import (
 
 type createOrderRepositoryMock struct {
 	savedOrder entity.Order
+	savedEvent entity.OrderCreatedEvent
 	saveErr    error
 }
 
 func (m *createOrderRepositoryMock) Save(_ context.Context, order entity.Order) error {
 	m.savedOrder = order
+	return m.saveErr
+}
+
+func (m *createOrderRepositoryMock) SaveWithEvent(_ context.Context, order entity.Order, event entity.OrderCreatedEvent) error {
+	m.savedOrder = order
+	m.savedEvent = event
 	return m.saveErr
 }
 
@@ -54,6 +61,12 @@ func TestCreateOrderUseCaseExecuteCreatesAndSavesPendingOrder(t *testing.T) {
 	}
 	if repo.savedOrder.ID != output.ID {
 		t.Fatalf("el pedido guardado tiene ID %q, se esperaba %q", repo.savedOrder.ID, output.ID)
+	}
+	if repo.savedEvent.EventID == "" || repo.savedEvent.EventType != entity.OrderCreatedEventType || repo.savedEvent.OrderID != output.ID {
+		t.Fatal("el evento order.created no fue construido correctamente")
+	}
+	if repo.savedEvent.OccurredAt.IsZero() {
+		t.Fatal("el evento debe tener fecha de ocurrencia")
 	}
 	if repo.savedOrder.CustomerID != "customer-123" {
 		t.Fatalf("CustomerID = %q, se esperaba normalizado", repo.savedOrder.CustomerID)

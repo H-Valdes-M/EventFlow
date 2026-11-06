@@ -6,8 +6,10 @@ import (
 	"os"
 
 	"eventflow/cmd/config"
+	orderinfra "eventflow/internal/order/infrastructure/postgres"
 	"eventflow/pkg/database"
 	"eventflow/pkg/logger"
+	"eventflow/pkg/pubsub"
 
 	"go.uber.org/zap"
 )
@@ -17,6 +19,8 @@ type WorkerResources struct {
 	Config   *config.Configuration
 	Logger   *zap.Logger
 	Database database.Database
+	RabbitMQ *pubsub.RabbitMQProvider
+	Relay    *orderinfra.OutboxRelay
 }
 
 func InitWorker() (*WorkerResources, error) {
@@ -36,22 +40,36 @@ func InitWorker() (*WorkerResources, error) {
 		_ = log.Sync()
 		return nil, err
 	}
-	return &WorkerResources{Config: cfg, Logger: log, Database: db}, nil
+	rabbit, err := pubsub.NewRabbitMQProvider(context.Background(), cfg.AMQPURL)
+	if err != nil {
+		db.Close()
+		_ = log.Sync()
+		return nil, err
+	}
+	relay, err := orderinfra.NewOutboxRelay(db, rabbit)
+	if err != nil {
+		rabbit.Close()
+		db.Close()
+		_ = log.Sync()
+		return nil, err
+	}
+	return &WorkerResources{Config: cfg, Logger: log, Database: db, RabbitMQ: rabbit, Relay: relay}, nil
 }
 
-// Run mantiene el proceso vivo y deja el punto de integración preparado para
-// el relay del outbox y el consumidor RabbitMQ.
+// Run publica los eventos pendientes del outbox en RabbitMQ.
 func (w *WorkerResources) Run(ctx context.Context) error {
-	if w == nil || w.Config == nil || w.Database == nil {
+	if w == nil || w.Config == nil || w.Database == nil || w.Relay == nil {
 		return errors.New("worker no inicializado")
 	}
-	<-ctx.Done()
-	return nil
+	return w.Relay.Run(ctx, w.Config.OutboxPollInterval, w.Config.OutboxBatchSize, w.Config.PublishConfirmTimeout)
 }
 
 func (w *WorkerResources) Shutdown() error {
 	if w == nil {
 		return nil
+	}
+	if w.RabbitMQ != nil {
+		w.RabbitMQ.Close()
 	}
 	if w.Database != nil {
 		w.Database.Close()

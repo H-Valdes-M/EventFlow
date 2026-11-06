@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -28,19 +29,45 @@ func NewOrderRepository(provider database.Database) (*OrderRepository, error) {
 
 // Save guarda el pedido y sus artículos en una misma transacción.
 func (r *OrderRepository) Save(ctx context.Context, order entity.Order) error {
+	return r.save(ctx, order, nil)
+}
+
+// SaveWithEvent guarda el pedido, sus artículos y el evento outbox en una
+// única transacción.
+func (r *OrderRepository) SaveWithEvent(ctx context.Context, order entity.Order, event entity.OrderCreatedEvent) error {
+	return r.save(ctx, order, &event)
+}
+
+func (r *OrderRepository) save(ctx context.Context, order entity.Order, event *entity.OrderCreatedEvent) error {
 	model := orderModelFromEntity(order)
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Omit("Items").Create(&model).Error; err != nil {
 			return err
 		}
-		if len(model.Items) == 0 {
+		if len(model.Items) > 0 {
+			if err := tx.Create(&model.Items).Error; err != nil {
+				return err
+			}
+		}
+		if event == nil {
 			return nil
 		}
-		return tx.Create(&model.Items).Error
+		payload, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		return tx.Create(&outboxEventModel{
+			MessageID:   event.EventID,
+			EventID:     event.EventID,
+			EventType:   event.EventType,
+			OrderID:     event.OrderID,
+			Payload:     payload,
+			AvailableAt: event.OccurredAt,
+			CreatedAt:   event.OccurredAt,
+		}).Error
 	}); err != nil {
 		return persistenceError(err)
 	}
-
 	return nil
 }
 
@@ -99,6 +126,21 @@ type orderItemModel struct {
 	Quantity       int64  `gorm:"column:quantity"`
 	UnitPriceMinor int64  `gorm:"column:unit_price_minor"`
 }
+
+type outboxEventModel struct {
+	MessageID        string     `gorm:"column:message_id;primaryKey"`
+	EventID          string     `gorm:"column:event_id;uniqueIndex"`
+	EventType        string     `gorm:"column:event_type"`
+	OrderID          string     `gorm:"column:order_id"`
+	Payload          []byte     `gorm:"column:payload;type:jsonb"`
+	AvailableAt      time.Time  `gorm:"column:available_at"`
+	PublishedAt      *time.Time `gorm:"column:published_at"`
+	PublishAttempts  int        `gorm:"column:publish_attempts"`
+	LastPublishError string     `gorm:"column:last_publish_error"`
+	CreatedAt        time.Time  `gorm:"column:created_at"`
+}
+
+func (outboxEventModel) TableName() string { return "outbox_events" }
 
 func (orderItemModel) TableName() string { return "order_items" }
 

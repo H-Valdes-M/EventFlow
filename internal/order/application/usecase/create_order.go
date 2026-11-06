@@ -46,7 +46,22 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, input dto.CreateOrder
 		return dto.CreateOrderOutput{}, err
 	}
 
-	if err := uc.repo.Save(ctx, order); err != nil {
+	eventID, err := NewUUID()
+	if err != nil {
+		return dto.CreateOrderOutput{}, apperrors.Wrap(
+			err,
+			apperrors.InternalError,
+			"ORDER_EVENT_ID_GENERATION",
+			"No se pudo crear el evento del pedido",
+		)
+	}
+	event := entity.OrderCreatedEvent{
+		EventID:    eventID,
+		EventType:  entity.OrderCreatedEventType,
+		OccurredAt: order.CreatedAt,
+		OrderID:    order.ID,
+	}
+	if err := uc.repo.SaveWithEvent(ctx, order, event); err != nil {
 		return dto.CreateOrderOutput{}, fmt.Errorf("guardar pedido: %w", err)
 	}
 

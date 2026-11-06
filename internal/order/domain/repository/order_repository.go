@@ -13,6 +13,7 @@ var ErrOrderNotFound = errors.New("pedido no encontrado")
 // OrderRepository define la persistencia necesaria por los casos de uso.
 type OrderRepository interface {
 	Save(context.Context, entity.Order) error
+	SaveWithEvent(context.Context, entity.Order, entity.OrderCreatedEvent) error
 	FindByID(context.Context, string) (*entity.Order, error)
 	FindAll(context.Context) ([]*entity.Order, error)
 }

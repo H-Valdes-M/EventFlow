@@ -22,6 +22,10 @@ func (m *getOrderRepositoryMock) Save(context.Context, entity.Order) error {
 	return nil
 }
 
+func (m *getOrderRepositoryMock) SaveWithEvent(context.Context, entity.Order, entity.OrderCreatedEvent) error {
+	return nil
+}
+
 func (m *getOrderRepositoryMock) FindByID(_ context.Context, id string) (*entity.Order, error) {
 	m.id = id
 	return m.order, m.err
