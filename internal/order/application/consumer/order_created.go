@@ -6,16 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"regexp"
 	"time"
 
 	"eventflow/internal/order/domain/entity"
+	"eventflow/pkg/identifier"
 	"eventflow/pkg/pubsub"
 )
 
 const Name = "order-created"
-
-var uuid = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // Store persiste el resultado antes de confirmar la entrega.
 type Store interface {
@@ -32,7 +30,7 @@ func (h *Handler) Handle(ctx context.Context, delivery pubsub.Delivery) (pubsub.
 	var event entity.OrderCreatedEvent
 	err := json.Unmarshal(delivery.Payload, &event)
 	if err != nil || delivery.Type != entity.OrderCreatedEventType || event.EventType != entity.OrderCreatedEventType ||
-		!uuid.MatchString(event.EventID) || !uuid.MatchString(event.OrderID) || event.OccurredAt.IsZero() || delivery.EventID != event.EventID {
+		!identifier.IsCanonicalUUID(event.EventID) || !identifier.IsCanonicalUUID(event.OrderID) || event.OccurredAt.IsZero() || delivery.EventID != event.EventID {
 		digest := sha256.Sum256(delivery.Payload)
 		if err := h.store.Reject(ctx, hex.EncodeToString(digest[:])); err != nil {
 			return pubsub.KeepUnconfirmed, err

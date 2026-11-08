@@ -13,13 +13,14 @@ import (
 	"eventflow/internal/order/application/dto"
 	"eventflow/pkg/apperrors"
 	"eventflow/pkg/httputil"
+	"eventflow/pkg/identifier"
 
 	"github.com/gin-gonic/gin"
 )
 
 const maxRequestBodyBytes = 1 << 20
 
-var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
+var idempotencyKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._~-]{1,128}$`)
 
 // CreateOrderExecutor es el contrato que necesita el handler para crear un
 // pedido. Mantenerlo como interfaz facilita probar HTTP sin PostgreSQL.
@@ -55,16 +56,23 @@ func NewOrderHandler(create CreateOrderExecutor, get GetOrderExecutor, getAll Ge
 // @Accept json
 // @Produce json
 // @Param request body createOrderRequest true "Pedido"
+// @Param Idempotency-Key header string true "Clave unica de 1 a 128 caracteres (letras, numeros, punto, guion, guion bajo o tilde)"
 // @Success 201 {object} createOrderResponse
-// @Failure 400,413,415,422,500 {object} httputil.ErrorResponse
+// @Failure 400,409,413,415,422,500 {object} httputil.ErrorResponse
 // @Router /orders [post]
 func (h *OrderHandler) Create(c *gin.Context) {
+	keys := c.Request.Header.Values("Idempotency-Key")
+	if len(keys) != 1 || !idempotencyKeyPattern.MatchString(keys[0]) {
+		writeError(c, apperrors.New(apperrors.BadRequest, "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key es obligatoria y debe contener entre 1 y 128 caracteres validos"))
+		return
+	}
 	input, err := decodeCreateRequest(c)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
+	input.IdempotencyKey = keys[0]
 	output, err := h.create.Execute(c.Request.Context(), input)
 	if err != nil {
 		writeError(c, err)
@@ -91,7 +99,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 // @Router /orders/{id} [get]
 func (h *OrderHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
-	if !uuidPattern.MatchString(id) {
+	if !identifier.IsOrderUUID(id) {
 		writeError(c, apperrors.New(apperrors.BadRequest, "INVALID_ORDER_ID", "El identificador del pedido no es valido"))
 		return
 	}

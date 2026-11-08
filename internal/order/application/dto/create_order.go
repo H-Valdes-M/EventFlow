@@ -2,8 +2,9 @@ package dto
 
 // CreateOrderInput contiene los datos para crear un pedido.
 type CreateOrderInput struct {
-	CustomerID string
-	Items      []CreateOrderItemInput
+	IdempotencyKey string
+	CustomerID     string
+	Items          []CreateOrderItemInput
 }
 
 // CreateOrderItemInput representa un artículo recibido por la aplicación.

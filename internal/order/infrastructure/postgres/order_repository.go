@@ -12,6 +12,7 @@ import (
 	"eventflow/pkg/database"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type OrderRepository struct {
@@ -39,36 +40,80 @@ func (r *OrderRepository) SaveWithEvent(ctx context.Context, order entity.Order,
 }
 
 func (r *OrderRepository) save(ctx context.Context, order entity.Order, event *entity.OrderCreatedEvent) error {
-	model := orderModelFromEntity(order)
 	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Omit("Items").Create(&model).Error; err != nil {
-			return err
-		}
-		if len(model.Items) > 0 {
-			if err := tx.Create(&model.Items).Error; err != nil {
-				return err
-			}
-		}
-		if event == nil {
-			return nil
-		}
-		payload, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
-		return tx.Create(&outboxEventModel{
-			MessageID:   event.EventID,
-			EventID:     event.EventID,
-			EventType:   event.EventType,
-			OrderID:     event.OrderID,
-			Payload:     payload,
-			AvailableAt: event.OccurredAt,
-			CreatedAt:   event.OccurredAt,
-		}).Error
+		return saveOrder(tx, order, event)
 	}); err != nil {
 		return persistenceError(err)
 	}
 	return nil
+}
+
+// SaveIdempotent reserva la clave y persiste pedido y evento de forma atomica.
+func (r *OrderRepository) SaveIdempotent(ctx context.Context, order entity.Order, event entity.OrderCreatedEvent, keyHash, requestHash string) (entity.Order, error) {
+	resultOrder := order
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		entry := idempotencyModel{KeyHash: keyHash, RequestHash: requestHash, OrderID: order.ID, ResponseStatus: string(order.Status), ResponseTotalMinor: order.TotalMinor}
+		result := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "key_hash"}}, DoNothing: true}).Create(&entry)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			if err := tx.First(&entry, "key_hash = ?", keyHash).Error; err != nil {
+				return err
+			}
+			if entry.RequestHash != requestHash {
+				return repository.ErrIdempotencyConflict
+			}
+			resultOrder = entity.Order{ID: entry.OrderID, Status: entity.OrderStatus(entry.ResponseStatus), TotalMinor: entry.ResponseTotalMinor}
+			return nil
+		}
+		return saveOrder(tx, order, &event)
+	})
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		return entity.Order{}, err
+	}
+	if err != nil {
+		return entity.Order{}, persistenceError(err)
+	}
+	return resultOrder, nil
+}
+
+type idempotencyModel struct {
+	KeyHash            string `gorm:"column:key_hash;primaryKey"`
+	RequestHash        string `gorm:"column:request_hash"`
+	OrderID            string `gorm:"column:order_id"`
+	ResponseStatus     string `gorm:"column:response_status"`
+	ResponseTotalMinor int64  `gorm:"column:response_total_minor"`
+}
+
+func (idempotencyModel) TableName() string { return "order_idempotency" }
+
+func saveOrder(tx *gorm.DB, order entity.Order, event *entity.OrderCreatedEvent) error {
+	model := orderModelFromEntity(order)
+	if err := tx.Omit("Items").Create(&model).Error; err != nil {
+		return err
+	}
+	if len(model.Items) > 0 {
+		if err := tx.Create(&model.Items).Error; err != nil {
+			return err
+		}
+	}
+	if event == nil {
+		return nil
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return tx.Create(&outboxEventModel{
+		MessageID:   event.EventID,
+		EventID:     event.EventID,
+		EventType:   event.EventType,
+		OrderID:     event.OrderID,
+		Payload:     payload,
+		AvailableAt: event.OccurredAt,
+		CreatedAt:   event.OccurredAt,
+	}).Error
 }
 
 // FindByID reconstruye un pedido junto con sus artículos sin modificar la

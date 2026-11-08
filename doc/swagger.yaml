@@ -168,6 +168,12 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/handler.createOrderRequest'
+      - description: Clave unica de 1 a 128 caracteres (letras, numeros, punto, guion,
+          guion bajo o tilde)
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -177,6 +183,10 @@ paths:
             $ref: '#/definitions/handler.createOrderResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "409":
+          description: Conflict
           schema:
             $ref: '#/definitions/httputil.ErrorResponse'
         "413":

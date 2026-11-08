@@ -88,6 +88,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handler.createOrderRequest"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Clave unica de 1 a 128 caracteres (letras, numeros, punto, guion, guion bajo o tilde)",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -99,6 +106,12 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/httputil.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/httputil.ErrorResponse"
                         }

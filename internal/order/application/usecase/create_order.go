@@ -3,6 +3,10 @@ package usecase
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,11 +18,11 @@ import (
 
 // CreateOrderUseCase coordina la validación de dominio y la persistencia.
 type CreateOrderUseCase struct {
-	repo repository.OrderRepository
+	repo repository.IdempotentOrderRepository
 }
 
 // crear un nuevo caso de uso para crear pedidos
-func NewCreateOrderUseCase(repo repository.OrderRepository) *CreateOrderUseCase {
+func NewCreateOrderUseCase(repo repository.IdempotentOrderRepository) *CreateOrderUseCase {
 	return &CreateOrderUseCase{repo: repo}
 }
 
@@ -61,7 +65,20 @@ func (uc *CreateOrderUseCase) Execute(ctx context.Context, input dto.CreateOrder
 		OccurredAt: order.CreatedAt,
 		OrderID:    order.ID,
 	}
-	if err := uc.repo.SaveWithEvent(ctx, order, event); err != nil {
+	canonical, err := json.Marshal(struct {
+		CustomerID string
+		Items      []entity.OrderItem
+	}{order.CustomerID, order.Items})
+	if err != nil {
+		return dto.CreateOrderOutput{}, fmt.Errorf("codificar pedido: %w", err)
+	}
+	keyHash := sha256.Sum256([]byte(input.IdempotencyKey))
+	requestHash := sha256.Sum256(canonical)
+	order, err = uc.repo.SaveIdempotent(ctx, order, event, hex.EncodeToString(keyHash[:]), hex.EncodeToString(requestHash[:]))
+	if errors.Is(err, repository.ErrIdempotencyConflict) {
+		return dto.CreateOrderOutput{}, apperrors.New(apperrors.Conflict, "IDEMPOTENCY_CONFLICT", "La clave ya se utilizo con otro pedido")
+	}
+	if err != nil {
 		return dto.CreateOrderOutput{}, fmt.Errorf("guardar pedido: %w", err)
 	}
 

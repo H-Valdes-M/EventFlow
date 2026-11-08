@@ -27,6 +27,10 @@ func (m *createOrderRepositoryMock) SaveWithEvent(_ context.Context, order entit
 	return m.saveErr
 }
 
+func (m *createOrderRepositoryMock) SaveIdempotent(ctx context.Context, order entity.Order, event entity.OrderCreatedEvent, _, _ string) (entity.Order, error) {
+	return order, m.SaveWithEvent(ctx, order, event)
+}
+
 func (m *createOrderRepositoryMock) FindByID(context.Context, string) (*entity.Order, error) {
 	return nil, errors.New("FindByID no esperado en esta prueba")
 }
