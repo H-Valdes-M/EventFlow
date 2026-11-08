@@ -1,0 +1,241 @@
+basePath: /
+definitions:
+  apperrors.Type:
+    enum:
+    - BAD_REQUEST
+    - VALIDATION_ERROR
+    - NOT_FOUND
+    - CONFLICT
+    - PAYLOAD_TOO_LARGE
+    - UNSUPPORTED_MEDIA_TYPE
+    - SERVICE_UNAVAILABLE
+    - INTERNAL_ERROR
+    type: string
+    x-enum-varnames:
+    - BadRequest
+    - ValidationError
+    - NotFound
+    - Conflict
+    - PayloadTooLarge
+    - UnsupportedMediaType
+    - ServiceUnavailable
+    - InternalError
+  dto.ErrorResponse:
+    properties:
+      error:
+        example: Service unhealthy
+        type: string
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
+  dto.HealthResponse:
+    properties:
+      database:
+        type: string
+      service:
+        example: microservice-seed-go
+        type: string
+      timestamp:
+        example: 2024-01-15T10.30:00Z
+        type: string
+    type: object
+  handler.createOrderRequest:
+    properties:
+      customer_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/handler.orderItemRequest'
+        type: array
+    type: object
+  handler.createOrderResponse:
+    properties:
+      id:
+        type: string
+      status:
+        type: string
+      total_minor:
+        type: integer
+    type: object
+  handler.getOrderResponse:
+    properties:
+      created_at:
+        type: string
+      customer_id:
+        type: string
+      id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/handler.orderItemResponse'
+        type: array
+      status:
+        type: string
+      total_minor:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  handler.orderItemRequest:
+    properties:
+      product_id:
+        type: string
+      quantity:
+        type: integer
+      unit_price_minor:
+        type: integer
+    type: object
+  handler.orderItemResponse:
+    properties:
+      product_id:
+        type: string
+      quantity:
+        type: integer
+      unit_price_minor:
+        type: integer
+    type: object
+  httputil.ErrorBody:
+    properties:
+      code:
+        type: string
+      details:
+        additionalProperties: {}
+        type: object
+      message:
+        type: string
+      type:
+        $ref: '#/definitions/apperrors.Type'
+    type: object
+  httputil.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/httputil.ErrorBody'
+      request_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API de EventFlow.
+  title: EventFlow API
+  version: "1.0"
+paths:
+  /healthz:
+    get:
+      description: Returns the health status of the service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Health Check
+      tags:
+      - Health
+  /orders:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.getOrderResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+      summary: Listar pedidos
+      tags:
+      - orders
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Pedido
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createOrderRequest'
+      - description: Clave unica de 1 a 128 caracteres (letras, numeros, punto, guion,
+          guion bajo o tilde)
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.createOrderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+      summary: Crear pedido
+      tags:
+      - orders
+  /orders/{id}:
+    get:
+      parameters:
+      - description: UUID del pedido
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.getOrderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.ErrorResponse'
+      summary: Consultar pedido
+      tags:
+      - orders
+swagger: "2.0"
