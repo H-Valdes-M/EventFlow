@@ -1,2 +1,0 @@
--- Los reintentos del consumidor viven en event_processing.
--- Este archivo se conserva como referencia de la migración anterior.

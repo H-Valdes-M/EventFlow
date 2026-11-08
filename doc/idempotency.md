@@ -20,14 +20,6 @@ La misma clave con datos diferentes devuelve `409 Conflict`. Para una operación
 nueva debe usarse otra clave. Las claves son globales, se almacenan como SHA-256
 y actualmente no tienen vencimiento; no deben contener datos sensibles.
 
-Aplicar la migración `004_order_idempotency` antes de iniciar la API. Para ejecutar
-la prueba de integración, proporcionar una URL de una base PostgreSQL de pruebas
-en la que el usuario tenga permiso para crear y eliminar esquemas:
-
-```powershell
-$env:TEST_DATABASE_URL = 'postgres://usuario:contraseña@localhost:5433/base_pruebas?sslmode=disable'
-go test ./internal/order/infrastructure/postgres -run TestIdempotencyPostgres -v
-```
-
-La prueba crea un esquema temporal aislado y lo elimina al finalizar. Sin esa
-variable, la prueba de integración se omite; las pruebas unitarias siguen activas.
+Aplicar las migraciones activas, incluida `003_idempotency`, antes de iniciar la
+API. La prueba de integración de idempotencia contra PostgreSQL está pendiente;
+las instrucciones para los tests disponibles se encuentran en el README.
