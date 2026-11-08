@@ -8,6 +8,7 @@ import (
 	"eventflow/pkg/database"
 	"eventflow/pkg/pubsub"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -15,9 +16,10 @@ import (
 type OutboxRelay struct {
 	db        *gorm.DB
 	publisher pubsub.Publisher
+	log       *zap.Logger
 }
 
-func NewOutboxRelay(provider database.Database, publisher pubsub.Publisher) (*OutboxRelay, error) {
+func NewOutboxRelay(provider database.Database, publisher pubsub.Publisher, log *zap.Logger) (*OutboxRelay, error) {
 	db, err := database.AsGORM(provider)
 	if err != nil {
 		return nil, err
@@ -25,7 +27,10 @@ func NewOutboxRelay(provider database.Database, publisher pubsub.Publisher) (*Ou
 	if publisher == nil {
 		return nil, errors.New("publisher de outbox no configurado")
 	}
-	return &OutboxRelay{db: db, publisher: publisher}, nil
+	if log == nil {
+		log = zap.NewNop()
+	}
+	return &OutboxRelay{db: db, publisher: publisher, log: log}, nil
 }
 
 // Run publica eventos pendientes hasta que el contexto se cancele.
@@ -84,6 +89,9 @@ func (r *OutboxRelay) publishBatch(ctx context.Context, batchSize int, publishTi
 		cancel()
 		if err != nil {
 			nextAttempt := time.Now().UTC().Add(backoff(attempt))
+			r.log.Warn("No se pudo publicar el evento; se reintentara",
+				zap.String("event_id", event.EventID), zap.String("order_id", event.OrderID),
+				zap.String("message_id", event.MessageID), zap.Int("attempt", attempt))
 			if updateErr := r.db.WithContext(ctx).Model(&outboxEventModel{}).
 				Where("message_id = ?", event.MessageID).
 				Updates(map[string]any{
@@ -101,6 +109,9 @@ func (r *OutboxRelay) publishBatch(ctx context.Context, batchSize int, publishTi
 			Updates(map[string]any{"published_at": publishedAt, "last_publish_error": nil}).Error; err != nil {
 			return err
 		}
+		r.log.Info("Evento publicado", zap.String("event_id", event.EventID),
+			zap.String("order_id", event.OrderID), zap.String("message_id", event.MessageID),
+			zap.String("event_type", event.EventType), zap.Int("attempt", attempt))
 	}
 	return nil
 }
